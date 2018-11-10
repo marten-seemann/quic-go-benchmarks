@@ -83,6 +83,7 @@ func init() {
 						defer GinkgoRecover()
 						_, err := str.Write(data)
 						Expect(err).ToNot(HaveOccurred())
+						str.Close()
 					}()
 					_, err = str.Read([]byte{0})
 					Expect(err).To(MatchError(io.EOF))
