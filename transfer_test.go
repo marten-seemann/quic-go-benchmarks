@@ -55,58 +55,79 @@ func init() {
 		const MB = 1 << 20
 		size := sizeMB * MB
 
-		Measure("QUIC", func(b Benchmarker) {
-			client, server := setupQUIC()
-			defer client.Close()
-			defer server.Close()
-			go func() {
-				defer GinkgoRecover()
-				buf := make([]byte, size)
-				str, err := server.AcceptStream()
-				if err != nil {
-					return
-				}
-				_, err = io.ReadFull(str, buf)
-				Expect(err).ToNot(HaveOccurred())
-				str.Close()
-			}()
+		for i := range conditions {
+			cond := conditions[i]
 
-			data := bytes.Repeat([]byte{0x42}, size)
-			b.Time("runtime", func() {
-				str, err := client.OpenStream()
-				Expect(err).ToNot(HaveOccurred())
-				go func() {
-					defer GinkgoRecover()
-					_, err := str.Write(data)
-					Expect(err).ToNot(HaveOccurred())
-					str.Close()
-				}()
-				_, err = str.Read([]byte{0})
-				Expect(err).To(MatchError(io.EOF))
+			Context(cond.Description, func() {
+				BeforeEach(func() {
+					if len(cond.Command) > 0 {
+						if !netemAvailable {
+							Skip("Skipping. netem not found.")
+						}
+						execNetem(cond.Command)
+					}
+				})
+
+				AfterEach(func() {
+					if len(cond.Command) > 0 && netemAvailable {
+						clearNetem()
+					}
+				})
+
+				Measure("QUIC", func(b Benchmarker) {
+					client, server := setupQUIC()
+					defer client.Close()
+					defer server.Close()
+					go func() {
+						defer GinkgoRecover()
+						buf := make([]byte, size)
+						str, err := server.AcceptStream()
+						if err != nil {
+							return
+						}
+						_, err = io.ReadFull(str, buf)
+						Expect(err).ToNot(HaveOccurred())
+						str.Close()
+					}()
+
+					data := bytes.Repeat([]byte{0x42}, size)
+					b.Time("runtime", func() {
+						str, err := client.OpenStream()
+						Expect(err).ToNot(HaveOccurred())
+						go func() {
+							defer GinkgoRecover()
+							_, err := str.Write(data)
+							Expect(err).ToNot(HaveOccurred())
+							str.Close()
+						}()
+						_, err = str.Read([]byte{0})
+						Expect(err).To(MatchError(io.EOF))
+					})
+				}, samples)
+
+				Measure("TCP", func(b Benchmarker) {
+					client, server := setupTCP()
+					go func() {
+						defer GinkgoRecover()
+						buf := make([]byte, size)
+						_, err := io.ReadFull(server, buf)
+						Expect(err).ToNot(HaveOccurred())
+						server.Close()
+					}()
+
+					data := bytes.Repeat([]byte{0x42}, size)
+					b.Time("runtime", func() {
+						go func() {
+							defer GinkgoRecover()
+							_, err := client.Write(data)
+							Expect(err).ToNot(HaveOccurred())
+						}()
+						_, err := client.Read([]byte{0})
+						Expect(err).To(MatchError(io.EOF))
+					})
+					client.Close()
+				}, samples)
 			})
-		}, samples)
-
-		Measure("TCP", func(b Benchmarker) {
-			client, server := setupTCP()
-			go func() {
-				defer GinkgoRecover()
-				buf := make([]byte, size)
-				_, err := io.ReadFull(server, buf)
-				Expect(err).ToNot(HaveOccurred())
-				server.Close()
-			}()
-
-			data := bytes.Repeat([]byte{0x42}, size)
-			b.Time("runtime", func() {
-				go func() {
-					defer GinkgoRecover()
-					_, err := client.Write(data)
-					Expect(err).ToNot(HaveOccurred())
-				}()
-				_, err := client.Read([]byte{0})
-				Expect(err).To(MatchError(io.EOF))
-			})
-			client.Close()
-		}, samples)
+		}
 	})
 }

@@ -34,12 +34,13 @@ func (r *myReporter) SpecDidComplete(specSummary *types.SpecSummary) {
 	if !specSummary.IsMeasurement {
 		return
 	}
-	method := specSummary.ComponentTexts[2]
+	cond := specSummary.ComponentTexts[2]
+	method := specSummary.ComponentTexts[3]
 	measurement, ok := specSummary.Measurements["runtime"]
 	if !ok {
 		return
 	}
-	r.addResult(method, "transfer", measurement)
+	r.addResult(method, cond, measurement)
 }
 
 func (r *myReporter) addResult(cond, ver string, measurement *types.SpecMeasurement) {
@@ -65,12 +66,12 @@ func (r *myReporter) printResult() {
 	}
 	table.SetColumnAlignment(colAlignments)
 
-	for _, cond := range []string{"transfer"} {
+	for _, cond := range conditions {
 		data := make([]string, len(header))
-		data[0] = cond
+		data[0] = cond.Description
 
 		for i := 1; i < len(header); i++ {
-			measurement := r.results[header[i]][cond]
+			measurement := r.results[header[i]][cond.Description]
 			var out string
 			if measurement == nil {
 				out = "-"
