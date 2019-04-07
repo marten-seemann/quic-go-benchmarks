@@ -14,9 +14,13 @@ func TestCrypto(t *testing.T) {
 	RunSpecs(t, "Benchmark Suite")
 }
 
-var samples int
+var (
+	samples int
+	sizeMB  int
+)
 
 func init() {
 	flag.IntVar(&samples, "samples", 3, "number of samples")
+	flag.IntVar(&sizeMB, "size", 10, "size of transfered data (in MB)")
 	flag.Parse()
 }

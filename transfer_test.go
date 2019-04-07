@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
-	"fmt"
 	"io"
 	"net"
 
@@ -54,64 +53,60 @@ func init() {
 		}
 
 		const MB = 1 << 20
-		sizesMB := []int{1, 5, 25, 100}
-		for i := range sizesMB {
-			sizeMB := sizesMB[i]
-			size := int(sizeMB * MB)
+		size := sizeMB * MB
 
-			Measure(fmt.Sprintf("QUIC: transfering %d MB of data", sizeMB), func(b Benchmarker) {
-				client, server := setupQUIC()
-				defer client.Close()
-				defer server.Close()
+		Measure("QUIC", func(b Benchmarker) {
+			client, server := setupQUIC()
+			defer client.Close()
+			defer server.Close()
+			go func() {
+				defer GinkgoRecover()
+				buf := make([]byte, size)
+				str, err := server.AcceptStream()
+				if err != nil {
+					return
+				}
+				_, err = io.ReadFull(str, buf)
+				Expect(err).ToNot(HaveOccurred())
+				str.Close()
+			}()
+
+			data := bytes.Repeat([]byte{0x42}, size)
+			b.Time("runtime", func() {
+				str, err := client.OpenStream()
+				Expect(err).ToNot(HaveOccurred())
 				go func() {
 					defer GinkgoRecover()
-					buf := make([]byte, size)
-					str, err := server.AcceptStream()
-					if err != nil {
-						return
-					}
-					_, err = io.ReadFull(str, buf)
+					_, err := str.Write(data)
 					Expect(err).ToNot(HaveOccurred())
 					str.Close()
 				}()
+				_, err = str.Read([]byte{0})
+				Expect(err).To(MatchError(io.EOF))
+			})
+		}, samples)
 
-				data := bytes.Repeat([]byte{0x42}, size)
-				b.Time("runtime", func() {
-					str, err := client.OpenStream()
-					Expect(err).ToNot(HaveOccurred())
-					go func() {
-						defer GinkgoRecover()
-						_, err := str.Write(data)
-						Expect(err).ToNot(HaveOccurred())
-						str.Close()
-					}()
-					_, err = str.Read([]byte{0})
-					Expect(err).To(MatchError(io.EOF))
-				})
-			}, samples)
+		Measure("TCP", func(b Benchmarker) {
+			client, server := setupTCP()
+			go func() {
+				defer GinkgoRecover()
+				buf := make([]byte, size)
+				_, err := io.ReadFull(server, buf)
+				Expect(err).ToNot(HaveOccurred())
+				server.Close()
+			}()
 
-			Measure(fmt.Sprintf("TCP: transfering %d MB of data", sizeMB), func(b Benchmarker) {
-				client, server := setupTCP()
+			data := bytes.Repeat([]byte{0x42}, size)
+			b.Time("runtime", func() {
 				go func() {
 					defer GinkgoRecover()
-					buf := make([]byte, size)
-					_, err := io.ReadFull(server, buf)
+					_, err := client.Write(data)
 					Expect(err).ToNot(HaveOccurred())
-					server.Close()
 				}()
-
-				data := bytes.Repeat([]byte{0x42}, size)
-				b.Time("runtime", func() {
-					go func() {
-						defer GinkgoRecover()
-						_, err := client.Write(data)
-						Expect(err).ToNot(HaveOccurred())
-					}()
-					_, err := client.Read([]byte{0})
-					Expect(err).To(MatchError(io.EOF))
-				})
-				client.Close()
-			}, samples)
-		}
+				_, err := client.Read([]byte{0})
+				Expect(err).To(MatchError(io.EOF))
+			})
+			client.Close()
+		}, samples)
 	})
 }
