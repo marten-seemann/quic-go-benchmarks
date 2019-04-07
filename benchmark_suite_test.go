@@ -10,23 +10,16 @@ import (
 
 func TestQuicGoBenchmark(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t, "Benchmark Suite", []Reporter{reporter})
+	RunSpecsWithDefaultAndCustomReporters(t, "Benchmark Suite", []Reporter{newBenchmarkReporter()})
 }
 
 var (
-	samples  int
-	sizeMB   int
-	reporter *myReporter
+	samples int
+	sizeMB  int
 )
 
 func init() {
 	flag.IntVar(&samples, "samples", 3, "number of samples")
 	flag.IntVar(&sizeMB, "size", 10, "size of transfered data (in MB)")
 	flag.Parse()
-
-	reporter = &myReporter{}
 }
-
-var _ = AfterSuite(func() {
-	reporter.printResult()
-})

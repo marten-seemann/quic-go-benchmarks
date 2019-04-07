@@ -20,11 +20,15 @@ type myReporter struct {
 
 var _ ginkgo.Reporter = &myReporter{}
 
+func newBenchmarkReporter() ginkgo.Reporter { return &myReporter{} }
+
 func (r *myReporter) SpecSuiteWillBegin(config.GinkgoConfigType, *types.SuiteSummary) {}
 func (r *myReporter) BeforeSuiteDidRun(*types.SetupSummary)                           {}
 func (r *myReporter) SpecWillRun(*types.SpecSummary)                                  {}
 func (r *myReporter) AfterSuiteDidRun(*types.SetupSummary)                            {}
-func (r *myReporter) SpecSuiteDidEnd(*types.SuiteSummary)                             {}
+func (r *myReporter) SpecSuiteDidEnd(*types.SuiteSummary) {
+	r.printResult()
+}
 
 func (r *myReporter) SpecDidComplete(specSummary *types.SpecSummary) {
 	if !specSummary.IsMeasurement {
